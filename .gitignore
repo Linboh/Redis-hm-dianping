@@ -1,0 +1,14 @@
+# ================================
+# IntelliJ IDEA 配置文件忽略
+# ================================
+.idea
+*.iml
+out
+gen
+target
+*.class
+
+*.log
+.settings
+.project
+banner.txt
