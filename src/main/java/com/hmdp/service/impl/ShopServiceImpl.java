@@ -1,20 +1,26 @@
 package com.hmdp.service.impl;
 
+import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hmdp.dto.Result;
 import com.hmdp.entity.Shop;
 import com.hmdp.mapper.ShopMapper;
 import com.hmdp.service.IShopService;
 import com.hmdp.utils.CacheClient;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
+import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
 import static com.hmdp.utils.RedisConstants.CACHE_SHOP_KEY;
 import static com.hmdp.utils.RedisConstants.CACHE_SHOP_TTL;
+import static org.apache.logging.log4j.message.MapMessage.MapFormat.JSON;
 
 /**
  * <p>
@@ -25,8 +31,39 @@ import static com.hmdp.utils.RedisConstants.CACHE_SHOP_TTL;
  * @since 2021-12-22
  */
 @Service
-public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IShopService {
+public  class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IShopService {
 
 
+    @Autowired
+    private  StringRedisTemplate redisTemplate;
+
+    @Autowired
+    private ShopMapper shopMapper;
+
+    @Override
+    public Shop queryShopById(Long id) {
+        String key = CACHE_SHOP_KEY + id;
+        String shopJson = redisTemplate.opsForValue().get(key);
+
+        // Step 1：缓存命中
+        if (StrUtil.isNotBlank(shopJson)) {
+            if ("null".equals(shopJson)) return null; // 缓存穿透
+            Shop shop = JSONUtil.toBean(shopJson, Shop.class);
+            return shop;
+        }
+
+        // Step 2：查询数据库
+        Shop Shop = shopMapper.selectById(id);
+        if (Shop == null) {
+            // 缓存空对象防止穿透，过期时间短
+            redisTemplate.opsForValue().set(key, "null", Duration.ofMinutes(5));
+            return null;
+        }
+
+        // Step 3：写入缓存
+        Shop shop = BeanUtil.copyProperties(Shop, Shop.class);
+        redisTemplate.opsForValue().set(key, JSONUtil.toJsonStr(shop), Duration.ofMinutes(30));
+        return shop;
+    }
 
 }
