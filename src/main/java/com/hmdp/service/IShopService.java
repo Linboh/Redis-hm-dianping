@@ -17,7 +17,7 @@ import org.springframework.stereotype.Service;
 
 public interface IShopService extends IService<Shop> {
 
-    Shop queryShopById(Long id);
+    Result queryShopById(Long id);
 
     Result updateShop(Shop shop);
 }

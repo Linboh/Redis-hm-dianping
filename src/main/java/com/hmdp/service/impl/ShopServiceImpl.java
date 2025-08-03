@@ -40,16 +40,21 @@ public  class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements I
     @Autowired
     private ShopMapper shopMapper;
 
+    /**
+     * 根据id查询店铺信息
+     * @param id 商铺id
+     * @return 商铺详情数据
+     */
     @Override
-    public Shop queryShopById(Long id) {
+    public Result queryShopById(Long id) {
         String key = CACHE_SHOP_KEY + id;
         String shopJson = redisTemplate.opsForValue().get(key);
 
         // Step 1：缓存命中
         if (StrUtil.isNotBlank(shopJson)) {
-            if ("null".equals(shopJson)) return null; // 缓存穿透
+            if ("null".equals(shopJson)) return Result.fail("店铺不存在"); // 缓存穿透
             Shop shop = JSONUtil.toBean(shopJson, Shop.class);
-            return shop;
+            return Result.ok(shop);
         }
 
         // Step 2：查询数据库
@@ -57,13 +62,13 @@ public  class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements I
         if (Shop == null) {
             // 缓存空对象防止穿透，过期时间短
             redisTemplate.opsForValue().set(key, "null", Duration.ofMinutes(5));
-            return null;
+            return Result.fail("店铺不存在");
         }
 
         // Step 3：写入缓存
         Shop shop = BeanUtil.copyProperties(Shop, Shop.class);
         redisTemplate.opsForValue().set(key, JSONUtil.toJsonStr(shop), Duration.ofMinutes(30));
-        return shop;
+        return Result.ok(shop);
     }
 
     /**
