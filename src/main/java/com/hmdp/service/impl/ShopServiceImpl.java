@@ -51,7 +51,7 @@ public  class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements I
         String shopJson = redisTemplate.opsForValue().get(key);
 
         // Step 1：缓存命中
-        if (StrUtil.isNotBlank(shopJson)) {
+        if (shopJson != null) {
             if ("null".equals(shopJson)) return Result.fail("店铺不存在"); // 缓存穿透
             Shop shop = JSONUtil.toBean(shopJson, Shop.class);
             return Result.ok(shop);
