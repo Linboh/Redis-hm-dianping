@@ -1,6 +1,6 @@
 package com.hmdp.service.impl;
 
-import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.util.BooleanUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -8,19 +8,14 @@ import com.hmdp.dto.Result;
 import com.hmdp.entity.Shop;
 import com.hmdp.mapper.ShopMapper;
 import com.hmdp.service.IShopService;
-import com.hmdp.utils.CacheClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import javax.annotation.Resource;
-import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
-import static com.hmdp.utils.RedisConstants.CACHE_SHOP_KEY;
-import static com.hmdp.utils.RedisConstants.CACHE_SHOP_TTL;
-import static org.apache.logging.log4j.message.MapMessage.MapFormat.JSON;
+import static com.hmdp.utils.RedisConstants.*;
 
 /**
  * <p>
@@ -35,10 +30,7 @@ public  class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements I
 
 
     @Autowired
-    private  StringRedisTemplate redisTemplate;
-
-    @Autowired
-    private ShopMapper shopMapper;
+    private  StringRedisTemplate stringredisTemplate;
 
     /**
      * 根据id查询店铺信息
@@ -48,26 +40,56 @@ public  class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements I
     @Override
     public Result queryShopById(Long id) {
         String key = CACHE_SHOP_KEY + id;
-        String shopJson = redisTemplate.opsForValue().get(key);
+        String shopJson = stringredisTemplate.opsForValue().get(key);
 
         // Step 1：缓存命中
-        if (shopJson != null) {
-            if ("null".equals(shopJson)) return Result.fail("店铺不存在"); // 缓存穿透
+        if (StrUtil.isNotBlank(shopJson)) {
             Shop shop = JSONUtil.toBean(shopJson, Shop.class);
             return Result.ok(shop);
         }
 
-        // Step 2：查询数据库
-        Shop Shop = shopMapper.selectById(id);
-        if (Shop == null) {
-            // 缓存空对象防止穿透，过期时间短
-            redisTemplate.opsForValue().set(key, "null", Duration.ofMinutes(5));
+        // 判断命中的是否是空值 shopJson = ""
+        if (shopJson != null) {
             return Result.fail("店铺不存在");
         }
 
-        // Step 3：写入缓存
-        Shop shop = BeanUtil.copyProperties(Shop, Shop.class);
-        redisTemplate.opsForValue().set(key, JSONUtil.toJsonStr(shop), Duration.ofMinutes(30));
+        // Step 2：实现缓存重建
+        String lockKey = LOCK_SHOP_KEY + id;
+        Shop shop = null;
+        try {
+            // 获取互斥锁
+            boolean isLock = tryLock(lockKey);
+            if (!isLock) {
+                // 获取锁失败，休眠并重试
+                Thread.sleep(50);
+                return queryShopById(id);
+            }
+
+            // 获取锁成功，再次检测redis缓存是否存在
+            shopJson = stringredisTemplate.opsForValue().get(key);
+            if (StrUtil.isNotBlank(shopJson)) {
+                shop = JSONUtil.toBean(shopJson, Shop.class);
+                return Result.ok(shop);
+            }
+
+            // 查询数据库
+            shop = getById(id);
+            if (shop == null) {
+                // 缓存空对象防止穿透
+                stringredisTemplate.opsForValue().set(key, "", CACHE_NULL_TTL, TimeUnit.MINUTES);
+                return Result.fail("店铺不存在");
+            }
+
+            // 写入缓存
+            stringredisTemplate.opsForValue().set(key, JSONUtil.toJsonStr(shop), CACHE_SHOP_TTL, TimeUnit.MINUTES);
+
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        } finally {
+            // 释放锁
+            unlock(lockKey);
+        }
+
         return Result.ok(shop);
     }
 
@@ -89,9 +111,27 @@ public  class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements I
 
         // 2. 删除缓存
         String key = CACHE_SHOP_KEY + id;
-        redisTemplate.delete(key);
+        stringredisTemplate.delete(key);
 
         return Result.ok();
+    }
+
+    /**
+     * 获取锁
+     * @param key 锁的key
+     * @return true代表获取锁成功; false代表获取锁失败
+     */
+    private boolean tryLock(String key) {
+        Boolean flag = stringredisTemplate.opsForValue().setIfAbsent(key, "1", 10, TimeUnit.SECONDS);
+        return BooleanUtil.isTrue(flag);
+    }
+
+    /**
+     * 释放锁
+     * @param key 锁的key
+     */
+    private void unlock(String key) {
+        stringredisTemplate.delete(key);
     }
 
 }
