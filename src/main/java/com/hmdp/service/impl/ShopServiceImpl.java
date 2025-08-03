@@ -10,6 +10,7 @@ import com.hmdp.dto.Result;
 import com.hmdp.entity.Shop;
 import com.hmdp.mapper.ShopMapper;
 import com.hmdp.service.IShopService;
+import com.hmdp.utils.CacheClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -41,48 +42,15 @@ public  class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements I
     private static final ExecutorService CACHE_REBUILD_EXECUTOR
             = Executors.newFixedThreadPool(10);
 
+    @Autowired
+    private CacheClient cacheClient;
+
     @Override
     public Result queryShopById(Long id) {
-        String key = CACHE_SHOP_KEY + id;
-        String shopJson = stringredisTemplate.opsForValue().get(key);
 
-        // Step 1：判断是否存在
-        if (StrUtil.isBlank(shopJson)) {
-            return Result.fail("店铺不存在");
-        }
+        Shop shop = cacheClient.queryWithPassThrough(
+                CACHE_SHOP_KEY, id, Shop.class, this::getById, CACHE_SHOP_TTL, TimeUnit.MINUTES);
 
-        // Step 2：命中，需要先把json反序列化为对象
-        RedisData redisData = JSONUtil.toBean(shopJson, RedisData.class);
-        Shop shop = JSONUtil.toBean((JSONObject) redisData.getData(), Shop.class);
-        LocalDateTime expireTime = redisData.getExpireTime();
-
-        // Step 3：判断是否过期
-        if (expireTime.isAfter(LocalDateTime.now())) {
-            // 未过期，直接返回店铺信息
-            return Result.ok(shop);
-        }
-
-        // Step 4：已过期，需要缓存重建
-        String lockKey = LOCK_SHOP_KEY + id;
-        boolean isLock = tryLock(lockKey);
-
-        // Step 5：判断是否获取锁成功
-        if (isLock) {
-            // 获取锁成功，开启独立线程，实现缓存重建
-            CACHE_REBUILD_EXECUTOR.submit(() -> {
-                try {
-                    // 重建缓存
-                    this.saveShop2Redis(id, 20L);
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                } finally {
-                    // 释放锁
-                    unlock(lockKey);
-                }
-            });
-        }
-
-        // Step 6：返回过期的商铺信息
         return Result.ok(shop);
     }
 
