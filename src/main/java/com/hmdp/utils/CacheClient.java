@@ -29,10 +29,24 @@ public class CacheClient {
         this.stringRedisTemplate = stringRedisTemplate;
     }
 
+    /**
+     * 设置缓存
+     * @param key 键
+     * @param value 值
+     * @param time 过期时间
+     * @param unit 时间单位
+     */
     public void set(String key, Object value, Long time, TimeUnit unit) {
         stringRedisTemplate.opsForValue().set(key, JSONUtil.toJsonStr(value), time, unit);
     }
 
+    /**
+     * 设置逻辑过期时间
+     * @param key 键
+     * @param value 值
+     * @param time 过期时间
+     * @param unit 时间单位
+     */
     public void setWithLogicalExpire(String key, Object value, Long time, TimeUnit unit) {
         // 设置逻辑过期
         RedisData redisData = new RedisData();
@@ -42,6 +56,16 @@ public class CacheClient {
         stringRedisTemplate.opsForValue().set(key, JSONUtil.toJsonStr(redisData));
     }
 
+    /**
+     * 缓存穿透--缓存空对象
+     * @param keyPrefix 键前缀
+     * @param id id
+     * @param type 类型
+     * @param dbFallback 数据库查询函数
+     * @param time 过期时间
+     * @param unit 时间单位
+     * @return 值
+     */
     public <R,ID> R queryWithPassThrough(
             String keyPrefix, ID id, Class<R> type, Function<ID, R> dbFallback, Long time, TimeUnit unit){
         String key = keyPrefix + id;
@@ -72,6 +96,16 @@ public class CacheClient {
         return r;
     }
 
+    /**
+     * 解决缓存击穿--逻辑过期方案
+     * @param keyPrefix 键前缀
+     * @param id id
+     * @param type 类型
+     * @param dbFallback 数据库查询函数
+     * @param time 过期时间
+     * @param unit 时间单位
+     * @return 值
+     */
     public <R, ID> R queryWithLogicalExpire(
             String keyPrefix, ID id, Class<R> type, Function<ID, R> dbFallback, Long time, TimeUnit unit) {
         String key = keyPrefix + id;
@@ -117,6 +151,17 @@ public class CacheClient {
         return r;
     }
 
+
+    /**
+     * 解决缓存击穿--互斥锁方案
+     * @param keyPrefix 键前缀
+     * @param id id
+     * @param type 类型
+     * @param dbFallback 数据库查询函数
+     * @param time 过期时间
+     * @param unit 时间单位
+     * @return 值
+     */
     public <R, ID> R queryWithMutex(
             String keyPrefix, ID id, Class<R> type, Function<ID, R> dbFallback, Long time, TimeUnit unit) {
         String key = keyPrefix + id;
@@ -166,11 +211,20 @@ public class CacheClient {
         return r;
     }
 
+    /**
+     * 获取锁
+     * @param key 锁的key
+     * @return true代表获取锁成功; false代表获取锁失败
+     */
     private boolean tryLock(String key) {
         Boolean flag = stringRedisTemplate.opsForValue().setIfAbsent(key, "1", 10, TimeUnit.SECONDS);
         return BooleanUtil.isTrue(flag);
     }
 
+    /**
+     * 释放锁
+     * @param key 锁的key
+     */
     private void unlock(String key) {
         stringRedisTemplate.delete(key);
     }
