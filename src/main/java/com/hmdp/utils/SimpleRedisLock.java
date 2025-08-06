@@ -20,10 +20,16 @@ public class SimpleRedisLock implements ILock {
 
     private static final String KEY_PREFIX = "lock:";
     private static final String ID_PREFIX = UUID.randomUUID().toString(true) + "-";
+
+    // lua脚本
     private static final DefaultRedisScript<Long> UNLOCK_SCRIPT;
+    // 静态代码块
     static {
+        //创建lua脚本对象
         UNLOCK_SCRIPT = new DefaultRedisScript<>();
+        //加载lua脚本
         UNLOCK_SCRIPT.setLocation(new ClassPathResource("unlock.lua"));
+        //设置返回值类型
         UNLOCK_SCRIPT.setResultType(Long.class);
     }
 
@@ -45,16 +51,18 @@ public class SimpleRedisLock implements ILock {
                 Collections.singletonList(KEY_PREFIX + name),
                 ID_PREFIX + Thread.currentThread().getId());
     }
-    /*@Override
-    public void unlock() {
-        // 获取线程标示
-        String threadId = ID_PREFIX + Thread.currentThread().getId();
-        // 获取锁中的标示
-        String id = stringRedisTemplate.opsForValue().get(KEY_PREFIX + name);
-        // 判断标示是否一致
-        if(threadId.equals(id)) {
-            // 释放锁
-            stringRedisTemplate.delete(KEY_PREFIX + name);
-        }
-    }*/
+
+
+//    @Override
+//    public void unlock() {
+//        // 获取线程标示
+//        String threadId = ID_PREFIX + Thread.currentThread().getId();
+//        // 获取锁中的标示
+//        String id = stringRedisTemplate.opsForValue().get(KEY_PREFIX + name);
+//        // 判断标示是否一致
+//        if(threadId.equals(id)) {
+//            // 释放锁
+//            stringRedisTemplate.delete(KEY_PREFIX + name);
+//        }
+//    }
 }
