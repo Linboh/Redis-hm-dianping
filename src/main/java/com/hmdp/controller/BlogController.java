@@ -29,8 +29,7 @@ public class BlogController {
 
     @Resource
     private IBlogService blogService;
-    @Resource
-    private IUserService userService;
+
 
     @PostMapping
     public Result saveBlog(@RequestBody Blog blog) {
@@ -63,21 +62,28 @@ public class BlogController {
         return Result.ok(records);
     }
 
+    /**
+     * 查询热门探店
+     * @param current 页码
+     * @return 热门探店列表
+     */
     @GetMapping("/hot")
     public Result queryHotBlog(@RequestParam(value = "current", defaultValue = "1") Integer current) {
-        // 根据用户查询
-        Page<Blog> page = blogService.query()
-                .orderByDesc("liked")
-                .page(new Page<>(current, SystemConstants.MAX_PAGE_SIZE));
-        // 获取当前页数据
-        List<Blog> records = page.getRecords();
-        // 查询用户
-        records.forEach(blog ->{
-            Long userId = blog.getUserId();
-            User user = userService.getById(userId);
-            blog.setName(user.getNickName());
-            blog.setIcon(user.getIcon());
-        });
-        return Result.ok(records);
+
+        return blogService.queryHotBlog(current);
     }
+
+
+    /**
+     * 根据id查询探店
+     * @param id 探店id
+     * @return 探店详情
+     */
+    @GetMapping("/{id}")
+    public Result queryBlogById(@PathVariable("id") Long id) {
+        return blogService.queryWithFollow(id);
+    }
+
+
+
 }
