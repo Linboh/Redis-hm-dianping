@@ -64,6 +64,12 @@
             <artifactId>spring-aspects</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>org.redisson</groupId>
+            <artifactId>redisson-spring-boot-starter</artifactId>
+            <version>3.17.5</version>
+        </dependency>
+
     </dependencies>
 
     <build>
