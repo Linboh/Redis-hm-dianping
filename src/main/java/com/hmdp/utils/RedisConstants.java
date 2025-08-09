@@ -33,4 +33,8 @@ public class RedisConstants {
 
     //秒杀库存key
     public static final String SECKILL_STOCK_KEY = "seckill:stock:";
+
+    //点赞key
+    public static final String BLOG_LIKED_KEY = "blog:liked:";
+    
 }

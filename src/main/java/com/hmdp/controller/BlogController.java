@@ -87,5 +87,18 @@ public class BlogController {
     }
 
 
+    /**
+     * 查询点赞用户
+     * @param id 探店id
+     * @return 探店详情
+     */
+    @GetMapping("/likes/{id}")
+    public Result queryBlogLikes(@PathVariable("id") Long id) {
+        return blogService.queryBlogLikes(id);
+    }
+
+
+
+
 
 }
