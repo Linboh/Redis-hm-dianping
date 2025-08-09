@@ -18,4 +18,6 @@ public interface IBlogService extends IService<Blog> {
 
     Result queryWithFollow(Long id);
 
+    Result likeBlog(Long id);
+
 }
